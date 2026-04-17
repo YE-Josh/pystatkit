@@ -1,6 +1,6 @@
-# Example: pystatkit v0.1 end-to-end
+# Example: pystatkit v0.2 end-to-end demo
 
-This folder demonstrates a complete `pystatkit` workflow using synthetic data modelled after a gait-and-gaze study comparing healthy controls (HC) and people with Parkinson's disease (PwP).
+This folder contains a complete `pystatkit` v0.2 demonstration — one YAML config exercising 7 of the 8 supported method families.
 
 ## Quick start
 
@@ -10,46 +10,40 @@ From the repository root:
 # 1. Generate the synthetic dataset (only needed once)
 python examples/study_example/generate_data.py
 
-# 2. Run each of the three example analyses
-python -m pystatkit.cli --config examples/study_example/config/01_two_group.yaml --no-confirm
-python -m pystatkit.cli --config examples/study_example/config/02_paired.yaml    --no-confirm
-python -m pystatkit.cli --config examples/study_example/config/03_anova.yaml     --no-confirm
+# 2. Run the full demo
+python -m pystatkit.cli \
+    --config examples/study_example/config/full_demo.yaml \
+    --no-confirm
 ```
 
-Remove the `--no-confirm` flag to see the human-in-the-loop prompt: assumption checks are displayed and you confirm the method before analysis runs.
+Remove `--no-confirm` for the interactive human-in-the-loop experience: after each method's assumption check is displayed, you confirm before the analysis runs.
 
-## Three demonstrated designs
+## What the demo runs
 
-| # | Config | Design | Method | What it shows |
-|---|---|---|---|---|
-| 1 | `01_two_group.yaml` | two-group independent | Welch's *t* | HC vs PwP gaze duration |
-| 2 | `02_paired.yaml`    | two-group paired      | paired *t*  | pre vs post step variability |
-| 3 | `03_anova.yaml`     | one-way ANOVA         | ANOVA + Tukey | RT across three difficulty levels |
+| Method | What it does | Output files |
+|---|---|---|
+| `demographic` | Table 1 by group, with automatic dedup of long-format repeats | `v02_demo_demographic.{docx,xlsx}` |
+| `two_group` | Welch's *t*-test: HC vs PwP on gaze duration | `v02_demo_two_group.{docx,xlsx}` |
+| `anova_oneway` | One-way ANOVA with Tukey: rt across 3 time points | `v02_demo_anova_oneway.{docx,xlsx}` |
+| `anova_rm` | Repeated-measures ANOVA with Mauchly + GG + pairwise post-hoc | `v02_demo_anova_rm.{docx,xlsx}` |
+| `anova_mixed` | Mixed ANOVA (time × group) + simple effects on significant interaction | `v02_demo_anova_mixed.{docx,xlsx}` |
+| `correlation` | Spearman correlations among 5 subject-level variables | `v02_demo_correlation.{docx,xlsx}` |
+| `ancova` | ANCOVA of motor score by group, adjusting for baseline cognition | `v02_demo_ancova.{docx,xlsx}` |
 
-## What each run produces
+(`paired` is disabled in the example config to avoid redundancy with `anova_rm`, but is fully supported.)
 
-For each config, `pystatkit` writes three files to `outputs/`:
+## Synthetic dataset
 
-- `<name>.docx` — APA-styled report, ready to paste into a manuscript
-- `<name>.xlsx` — multi-sheet workbook (Summary, Descriptives, Primary, PostHoc)
-- `logs/<name>.log` — run log with provenance metadata
+The script `generate_data.py` creates `data/synthetic_v02_data.csv` with:
 
-## Data schema
+- **40 subjects** (20 HC, 20 PwP)
+- Long format: one row per subject × time point = 120 rows
+- Subject-level columns: `age`, `bmi`, `sex`, `gaze_duration`, `motor_score`, `baseline_cognition`
+- Within-subject column: `rt` measured at `T1`, `T2`, `T3` (with a deliberate PwP × time interaction for the mixed-ANOVA demo)
 
-The synthetic dataset `data/synthetic_gait_data.csv` is in long format:
-
-| Column | Description |
-|---|---|
-| `subject_id` | Unique subject identifier |
-| `group` | HC or PwP |
-| `condition` | Session label (baseline / pre / post / trial) |
-| `difficulty` | Trial difficulty (easy / medium / hard / NA) |
-| `gaze_duration_real` | Gaze duration DV (one row per subject) |
-| `step_variability` | Step variability DV (pre/post — two rows per subject) |
-| `reaction_time` | Reaction time DV (three rows per subject × difficulty) |
-
-Each DV lives in its own column; non-applicable rows for that DV are `NaN`. `pystatkit` filters to rows with a valid DV before running analyses.
+The data uses a fixed random seed (42) so results are reproducible.
 
 ## Notes
 
-The data are purely synthetic and generated with a fixed random seed (`42`) in `generate_data.py`. They are designed to produce clean, interpretable results for demonstration — not to reflect any specific real study.
+- The data is purely synthetic and designed to produce clean, interpretable results for demonstration. It does not represent any real study population.
+- For multi-DV long-format data (like this one), `pystatkit` automatically filters to rows with valid values of the outcome under analysis, and `demographic` and `correlation` deduplicate repeated rows before summarizing.

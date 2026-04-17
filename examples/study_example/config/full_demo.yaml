@@ -1,0 +1,111 @@
+# =============================================================================
+# pystatkit v0.2 — complete example config
+# Exercises all 8 supported methods in a single run.
+# =============================================================================
+
+study:
+  name: "Example study: HC vs PwP gait & cognition"
+  analyst: "pystatkit demo"
+  date: "2026-04-17"
+  notes: "Synthetic data; demonstrates v0.2 end-to-end capability."
+
+data:
+  file: "examples/study_example/data/synthetic_v02_data.csv"
+  format: "long"
+  id_col: "subject_id"
+
+defaults:
+  alpha: 0.05
+  ci_level: 0.95
+  digits: 3
+  na_policy: "listwise"
+  p_adjust: "holm"
+  confirm_method: false   # non-interactive for reproducibility
+
+output:
+  dir: "examples/study_example/outputs"
+  basename: "v02_demo"
+  formats: ["docx", "xlsx"]
+  include_provenance: true
+
+methods:
+
+  # 1. Demographic / Table 1
+  demographic:
+    enabled: true
+    group_by: "group"
+    continuous: ["age", "bmi", "baseline_cognition"]
+    categorical: ["sex"]
+    continuous_summary: "mean_sd"
+    include_tests: true
+    overall_column: true
+
+  # 2. Two-group independent comparison (gaze duration HC vs PwP)
+  two_group:
+    enabled: true
+    outcome: "gaze_duration"
+    group: "group"
+    method: "welch_t"
+    normality_check: "shapiro"
+    homogeneity_check: "levene_median"
+    effect_size: "cohens_d"
+
+  # 3. Paired (pre/post); here using T1 vs T3 of rt as a 2-condition paired demo
+  # NOTE: We use anova_rm below for the full 3-level within-subject analysis.
+  paired:
+    enabled: false        # disabled to avoid redundancy with anova_rm
+
+  # 4. One-way ANOVA (rt across 3 time points, collapsed across group)
+  anova_oneway:
+    enabled: true
+    outcome: "rt"
+    group: "time"
+    method: "anova"
+    normality_check: "shapiro"
+    homogeneity_check: "levene_median"
+    posthoc: "tukey"
+    effect_size: "partial_eta_sq"
+
+  # 5. Repeated-measures ANOVA (rt × time, within-subject)
+  anova_rm:
+    enabled: true
+    outcome: "rt"
+    within: ["time"]
+    sphericity_check: true
+    sphericity_correction: "gg"
+    posthoc: "holm"
+    effect_size: "partial_eta_sq"
+
+  # 6. Mixed ANOVA (rt × time within, group between)
+  anova_mixed:
+    enabled: true
+    outcome: "rt"
+    within: "time"
+    between: "group"
+    sphericity_correction: "gg"
+    posthoc: "holm"
+    simple_effects: true
+    effect_size: "partial_eta_sq"
+
+  # 7. Correlations across per-subject variables
+  correlation:
+    enabled: true
+    vars: ["age", "bmi", "baseline_cognition", "gaze_duration", "motor_score"]
+    method: "spearman"
+    ci: true
+    matrix_output: true
+
+  # 8. ANCOVA: motor_score by group, controlling for baseline_cognition
+  ancova:
+    enabled: true
+    outcome: "motor_score"
+    group: "group"
+    covariates: ["baseline_cognition"]
+    check_assumptions:
+      homogeneity_of_slopes: true
+      linearity: true
+      normality_residuals: true
+      homogeneity_variance: true
+    adjusted_means: true
+    posthoc: "holm"
+    effect_size: "partial_eta_sq"

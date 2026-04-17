@@ -1,29 +1,22 @@
-"""Data loading and long-format schema validation."""
+"""Data loading and per-method column validation.
+
+In v0.2 the data is loaded ONCE for the whole run, then each method validates
+the columns it needs against the already-loaded DataFrame. This avoids
+re-reading the file for each method and lets us cache the data hash.
+"""
 
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 
 import pandas as pd
 
-from pystatkit.core.config import AnalysisConfig
+from pystatkit.core.config import DataConfig, MethodConfig, StudyConfig
 
 
-def load_data(config: AnalysisConfig) -> pd.DataFrame:
-    """Load a dataset from .csv or .xlsx according to the config.
-
-    Parameters
-    ----------
-    config : AnalysisConfig
-        Configuration specifying the data file and (optionally) sheet.
-
-    Returns
-    -------
-    pd.DataFrame
-        The loaded data.
-    """
-    path = config.data_file
+def load_data(config: StudyConfig) -> pd.DataFrame:
+    """Load the dataset specified in `config.data`."""
+    path = config.data.file
     if not path.exists():
         raise FileNotFoundError(f"Data file not found: {path}")
 
@@ -31,87 +24,89 @@ def load_data(config: AnalysisConfig) -> pd.DataFrame:
     if suffix == ".csv":
         df = pd.read_csv(path)
     elif suffix in (".xlsx", ".xls"):
-        df = pd.read_excel(path, sheet_name=config.sheet or 0)
+        df = pd.read_excel(path, sheet_name=config.data.sheet or 0)
     else:
         raise ValueError(f"Unsupported file type: {suffix}. Use .csv or .xlsx.")
 
     return df
 
 
-def validate_schema(df: pd.DataFrame, config: AnalysisConfig) -> None:
-    """Verify that the DataFrame contains the required columns for the analysis.
+def _required_columns(method_cfg: MethodConfig, data_cfg: DataConfig) -> list[str]:
+    """Return the set of columns a given method needs in the DataFrame.
 
-    Raises
-    ------
-    ValueError
-        If a required column is missing or contains unexpected data.
+    Centralizes schema expectations so validation is consistent.
     """
-    required: list[str] = [config.dv]
-    if config.group:
-        required.append(config.group)
-    if config.subject:
-        required.append(config.subject)
-    if config.condition:
-        required.append(config.condition)
+    from pystatkit.core.config import (
+        AncovaConfig,
+        AnovaMixedConfig,
+        AnovaOnewayConfig,
+        AnovaRMConfig,
+        CorrelationConfig,
+        DemographicConfig,
+        PairedConfig,
+        TwoGroupConfig,
+    )
 
+    cols: list[str] = []
+
+    if isinstance(method_cfg, DemographicConfig):
+        cols.extend(method_cfg.continuous)
+        cols.extend(method_cfg.categorical)
+        if method_cfg.group_by:
+            cols.append(method_cfg.group_by)
+
+    elif isinstance(method_cfg, TwoGroupConfig):
+        cols.extend([method_cfg.outcome, method_cfg.group])
+
+    elif isinstance(method_cfg, PairedConfig):
+        id_col = method_cfg.id or data_cfg.id_col
+        cols.extend([method_cfg.outcome, method_cfg.condition, id_col])
+
+    elif isinstance(method_cfg, AnovaOnewayConfig):
+        cols.extend([method_cfg.outcome, method_cfg.group])
+
+    elif isinstance(method_cfg, AnovaRMConfig):
+        id_col = method_cfg.id or data_cfg.id_col
+        cols.append(method_cfg.outcome)
+        cols.extend(method_cfg.within)
+        cols.append(id_col)
+
+    elif isinstance(method_cfg, AnovaMixedConfig):
+        id_col = method_cfg.id or data_cfg.id_col
+        cols.extend(
+            [method_cfg.outcome, method_cfg.within, method_cfg.between, id_col]
+        )
+
+    elif isinstance(method_cfg, CorrelationConfig):
+        cols.extend(method_cfg.vars)
+
+    elif isinstance(method_cfg, AncovaConfig):
+        cols.extend([method_cfg.outcome, method_cfg.group])
+        cols.extend(method_cfg.covariates)
+
+    return [c for c in cols if c]  # drop Nones
+
+
+def validate_data_columns(
+    df: pd.DataFrame, method_cfg: MethodConfig, data_cfg: DataConfig
+) -> None:
+    """Verify that `df` contains all columns required by `method_cfg`."""
+    required = _required_columns(method_cfg, data_cfg)
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(
-            f"Missing required columns in data: {missing}. "
-            f"Available columns: {list(df.columns)}"
+            f"Method '{method_cfg.name}' requires columns {missing}, "
+            f"but they are not in the data. Available columns: {list(df.columns)}"
         )
-
-    # DV must be numeric.
-    if not pd.api.types.is_numeric_dtype(df[config.dv]):
-        raise ValueError(
-            f"Dependent variable '{config.dv}' must be numeric, "
-            f"got dtype {df[config.dv].dtype}."
-        )
-
-    # Warn on missing values in DV.
-    n_missing = df[config.dv].isna().sum()
-    if n_missing > 0:
-        print(
-            f"[pystatkit] Warning: {n_missing} missing value(s) in '{config.dv}'. "
-            f"These will be dropped by the statistical routine."
-        )
-
-    # Group-specific checks — only count groups with actual DV data.
-    df_valid = df[df[config.dv].notna()]
-
-    if config.design == "two_group_independent":
-        n_groups = df_valid[config.group].nunique()
-        if n_groups != 2:
-            raise ValueError(
-                f"Two-group design requires exactly 2 levels in '{config.group}' "
-                f"with valid DV data, found {n_groups}: "
-                f"{sorted(df_valid[config.group].dropna().unique())}"
-            )
-
-    if config.design == "one_way_anova":
-        n_groups = df_valid[config.group].nunique()
-        if n_groups < 3:
-            raise ValueError(
-                f"One-way ANOVA requires at least 3 levels in '{config.group}', "
-                f"found {n_groups}. Consider a two-group comparison instead."
-            )
-
-    if config.design == "two_group_paired":
-        n_conditions = df_valid[config.condition].nunique()
-        if n_conditions != 2:
-            raise ValueError(
-                f"Paired design requires exactly 2 levels in '{config.condition}', "
-                f"found {n_conditions}."
-            )
 
 
 def hash_data(df: pd.DataFrame) -> str:
-    """Compute a short SHA-256 hash of the DataFrame for provenance tracking.
-
-    The hash is deterministic for the same data content and used in output
-    metadata to allow tracing a result back to its exact input.
-    """
+    """Short SHA-256 hash of the DataFrame content (for provenance)."""
     hasher = hashlib.sha256()
-    # Use pandas' own bytes representation for determinism.
     hasher.update(pd.util.hash_pandas_object(df, index=True).values.tobytes())
     return hasher.hexdigest()[:12]
+
+
+def filter_dv(df: pd.DataFrame, outcome: str) -> pd.DataFrame:
+    """Return rows with a non-null outcome — used before tests on a specific DV."""
+    return df[df[outcome].notna()].copy()

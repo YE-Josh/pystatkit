@@ -1,14 +1,8 @@
-"""Command-line interface for pystatkit.
+"""pystatkit CLI (v0.2).
 
-Usage
------
-    pystatkit --config path/to/config.yaml
-    pystatkit --config path/to/config.yaml --no-confirm   # skip interactive prompt
-
-The CLI embodies the human-in-the-loop design: assumption checks are
-reported and the user is asked to confirm the chosen method before the
-analysis runs. Non-interactive runs (--no-confirm) are available for
-scripting and reproducible pipelines.
+Loads a StudyConfig, loads the data once, then runs every enabled method
+via the orchestrator. Outputs for all methods are written under a single
+``output.dir`` using ``<basename>_<method>.{docx,xlsx}``.
 """
 
 from __future__ import annotations
@@ -18,20 +12,18 @@ import logging
 import sys
 from pathlib import Path
 
-from pystatkit.core.assumptions import run_assumption_checks
 from pystatkit.core.config import load_config
-from pystatkit.core.data_loader import hash_data, load_data, validate_schema
+from pystatkit.core.data_loader import hash_data, load_data
+from pystatkit.core.orchestrator import MethodRun, run_study
 from pystatkit.core.provenance import get_run_metadata
 from pystatkit.io.apa_formatter import write_docx_report, write_xlsx_report
-from pystatkit.methods import run_analysis
 
 logger = logging.getLogger("pystatkit")
 
 
-def _setup_logging(log_dir: Path, output_name: str) -> None:
+def _setup_logging(log_dir: Path, basename: str) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{output_name}.log"
-
+    log_path = log_dir / f"{basename}.log"
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
     file_handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
@@ -46,102 +38,94 @@ def _setup_logging(log_dir: Path, output_name: str) -> None:
     logger.addHandler(stream_handler)
 
 
-def _confirm_method(method: str) -> bool:
-    """Ask the user to confirm the chosen method after seeing assumption results."""
-    print()
+def _interactive_confirm(method_label: str) -> bool:
     prompt = (
-        f"Proceed with method '{method}'? "
-        f"[Y]es / [n]o (abort and edit config): "
+        f"\nProceed with '{method_label}'? "
+        f"[Y]es / [n]o (skip this method): "
     )
     response = input(prompt).strip().lower()
     return response in ("", "y", "yes")
 
 
+def _write_outputs(
+    runs: list[MethodRun],
+    config,
+    metadata,
+) -> None:
+    """Write docx/xlsx for every successful method run."""
+    config.output.dir.mkdir(parents=True, exist_ok=True)
+    base = config.output.basename
+
+    for run in runs:
+        if run.skipped or run.result is None:
+            continue
+
+        stem = config.output.dir / f"{base}_{run.method_key}"
+
+        if "docx" in config.output.formats:
+            write_docx_report(run.result, metadata, stem.with_suffix(".docx"))
+            logger.info(f"Wrote: {stem.with_suffix('.docx')}")
+
+        if "xlsx" in config.output.formats:
+            write_xlsx_report(run.result, metadata, stem.with_suffix(".xlsx"))
+            logger.info(f"Wrote: {stem.with_suffix('.xlsx')}")
+
+
+def _print_summary(runs: list[MethodRun]) -> None:
+    print("\n" + "=" * 60)
+    print("RUN SUMMARY")
+    print("=" * 60)
+    for run in runs:
+        status = "SKIPPED" if run.skipped else "OK"
+        print(f"  [{status}] {run.method_key}: {run.method_name}")
+        if run.skipped:
+            print(f"           reason: {run.skip_reason}")
+        elif run.result is not None:
+            print(f"           {run.result.interpretation}")
+    print("=" * 60)
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point. Returns 0 on success, non-zero on error."""
     parser = argparse.ArgumentParser(
         prog="pystatkit",
-        description=(
-            "Run a single statistical analysis specified by a YAML config. "
-            "Assumption checks are always reported; the chosen method is "
-            "executed as specified."
-        ),
+        description="Run all enabled methods from a YAML config.",
     )
-    parser.add_argument(
-        "--config", "-c", required=True, type=Path, help="Path to config YAML."
-    )
+    parser.add_argument("--config", "-c", required=True, type=Path)
     parser.add_argument(
         "--no-confirm",
         action="store_true",
-        help="Skip the interactive confirmation step (for scripted runs).",
+        help="Skip the interactive confirmation after each assumption check.",
     )
     args = parser.parse_args(argv)
 
-    # Load config.
     config = load_config(args.config)
 
-    # Set up logging into the output directory so logs are co-located with results.
-    log_dir = config.output_dir.parent / "logs" if config.output_dir.name == "tables" \
-        else config.output_dir / "logs"
-    _setup_logging(log_dir, config.output_name)
+    _setup_logging(config.output.dir / "logs", config.output.basename)
+    logger.info("pystatkit v0.2 run started")
+    logger.info(f"Config:  {args.config}")
+    logger.info(f"Study:   {config.study.name}")
+    logger.info(
+        f"Enabled: {[m.name for m in config.enabled_methods()]}"
+    )
 
-    logger.info("pystatkit run started")
-    logger.info(f"Config: {args.config}")
-    logger.info(f"Design: {config.design}  Method: {config.method}")
-
-    # Load and validate data.
     df = load_data(config)
-    validate_schema(df, config)
     data_hash = hash_data(df)
     logger.info(f"Data loaded: {len(df)} rows, hash={data_hash}")
 
-    # Filter to rows with a valid DV — multi-DV datasets often have NaN-padded rows.
-    n_before = len(df)
-    df = df[df[config.dv].notna()].copy()
-    if len(df) < n_before:
-        logger.info(
-            f"Filtered to {len(df)} rows with non-null '{config.dv}' "
-            f"(dropped {n_before - len(df)})."
-        )
+    confirm_cb = None
+    if config.defaults.confirm_method and not args.no_confirm:
+        confirm_cb = _interactive_confirm
 
-    # Run assumption checks and display.
-    assumptions = run_assumption_checks(df, config)
-    print()
-    print(assumptions.to_text(alpha=config.alpha))
+    runs = run_study(df, config, confirm_callback=confirm_cb)
 
-    # Human-in-the-loop confirmation.
-    if config.confirm_method and not args.no_confirm:
-        if not _confirm_method(config.method):
-            logger.info("User aborted after reviewing assumption checks.")
-            print("Aborted. Edit the config and re-run.")
-            return 1
-
-    # Run the analysis.
-    result = run_analysis(df, config)
-    logger.info(f"Analysis complete: {result.method}, n={result.n_total}")
-
-    # Collect provenance.
     metadata = get_run_metadata(data_hash=data_hash, config_path=args.config)
+    _write_outputs(runs, config, metadata)
 
-    # Write outputs.
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-    docx_path = config.output_dir / f"{config.output_name}.docx"
-    xlsx_path = config.output_dir / f"{config.output_name}.xlsx"
+    _print_summary(runs)
 
-    write_docx_report(result, metadata, docx_path)
-    write_xlsx_report(result, metadata, xlsx_path)
-
-    logger.info(f"Wrote: {docx_path}")
-    logger.info(f"Wrote: {xlsx_path}")
-
-    # Echo the APA interpretation to the console for quick copy/paste.
-    print()
-    print("=== Result ===")
-    print(result.interpretation)
-    print()
-    print(f"Outputs: {docx_path}  and  {xlsx_path}")
-
-    return 0
+    # Non-zero exit if any method was skipped due to an error (not user choice).
+    errored = [r for r in runs if r.skipped and "declined" not in r.skip_reason]
+    return 1 if errored else 0
 
 
 if __name__ == "__main__":

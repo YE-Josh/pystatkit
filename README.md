@@ -2,63 +2,45 @@
 
 **A reproducible, human-in-the-loop statistical analysis toolkit for behavioural and health sciences research.**
 
-![status](https://img.shields.io/badge/status-alpha%20(v0.1)-orange)
+![status](https://img.shields.io/badge/status-alpha%20(v0.2)-orange)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
+![tests](https://img.shields.io/badge/tests-62%20passing-brightgreen)
 
 ---
 
 ## Overview
 
-`pystatkit` is a Python toolkit that streamlines the statistical analysis workflow typical of empirical research in the behavioural, sport, and health sciences — from descriptive statistics to inferential testing and publication-ready tables.
+`pystatkit` is a Python toolkit that streamlines a complete statistical analysis workflow — from descriptive statistics to inferential testing, assumption checking, and APA-formatted publication-ready output — in a single configuration-driven run.
 
-Unlike tools that attempt to fully automate statistical decision-making, `pystatkit` is built around a **human-in-the-loop** philosophy: the toolkit transparently reports assumption checks and candidate methods, while the researcher retains explicit control over the choice of statistical test. This design avoids a common pitfall of fully automated pipelines — silently applying an inappropriate method when data violate assumptions — while still removing the tedium of manual test execution, effect size computation, and APA-style table formatting.
+Unlike tools that attempt to fully automate statistical decision-making, `pystatkit` is built around a **human-in-the-loop** philosophy: the toolkit transparently reports assumption checks, but the researcher chooses the statistical method. This avoids a common pitfall of fully automated pipelines — silently applying an inappropriate method when assumptions are violated — while still removing the tedium of manual test execution, effect size computation, and table formatting.
 
-`pystatkit` is designed to serve **multiple studies from a single codebase**. A single configuration file describes the study design, dependent variables, and grouping factors; the same analysis engine can then be reused across studies without rewriting analysis scripts.
+A single YAML config file specifies the study design and all analyses; `pystatkit` loads the data once and runs every enabled method in sequence, producing one APA-styled report per method.
 
 ## Status
 
-**Alpha (v0.1).** Core pipeline and a focused set of statistical methods are implemented and tested. APIs and output formats may still change. Early feedback from the research community is warmly welcomed.
-
-## Motivation
-
-Researchers running multi-study projects often face the same workflow repeatedly:
-
-1. Load a cleaned dataset.
-2. Check statistical assumptions (normality, homogeneity of variance, sphericity).
-3. Select an appropriate test based on the design and assumption check outcomes.
-4. Run the test together with relevant post-hoc comparisons and effect sizes.
-5. Format the output as a publication-ready table.
-
-Existing tools address parts of this workflow well — for example, `tableone` for descriptive tables and `pingouin` for statistical tests — but a gap remains for a reproducible, configuration-driven layer that connects these steps, handles multiple studies uniformly, and produces APA-style output. Point-and-click tools such as SPSS, JASP, and jamovi offer usability but limit reproducibility and integration with version control. `pystatkit` aims to fill this gap for Python-based research workflows.
+**Alpha (v0.2).** All eight core method families are implemented and tested (62 tests passing). APIs and output formats may still change before v1.0. Early feedback from the research community is warmly welcomed.
 
 ## Design Principles
 
-1. **Human judgement over automated selection.** Assumption checks are reported transparently; the researcher chooses the statistical method. The toolkit may suggest candidate methods but never silently selects one.
-2. **Reproducibility by default.** Every analysis is driven by a version-controlled configuration file. Outputs are annotated with the configuration, Git commit hash, and input data hash.
-3. **Multi-study reusability.** A single installation and codebase can serve multiple studies, provided data follow a shared long-format schema.
-4. **Publication-ready output.** Tables are formatted according to APA 7th edition conventions and exported to `.docx` and `.xlsx`.
-5. **Built on established libraries.** Statistical computations rely on well-maintained packages (notably `pingouin`) rather than re-implementing tests. `pystatkit` is an orchestration and formatting layer.
+1. **Human judgement over automated selection.** Assumption checks are reported transparently; the researcher chooses the method. No `auto` option exists anywhere in the config — explicit choice is required.
+2. **Reproducibility by default.** Every analysis is driven by a version-controlled configuration file. Outputs are annotated with the config path, Git commit hash, data hash, and timestamps.
+3. **Multi-study reusability.** One installation, one codebase, many studies — provided data follow a shared long-format schema.
+4. **Publication-ready output.** APA 7 format, exported to `.docx` and `.xlsx`.
+5. **Built on established libraries.** Statistics rely on `pingouin`, `tableone`, and `statsmodels` rather than re-implementing tests. `pystatkit` is an orchestration and formatting layer.
 
-## What's in v0.1
+## Methods implemented in v0.2
 
-**Designs and methods:**
-
-| Design | Methods |
+| Method family | Methods |
 |---|---|
-| Two-group independent | Student's *t*, Welch's *t*, Mann–Whitney *U* |
-| Two-group paired      | Paired *t*, Wilcoxon signed-rank |
-| One-way ANOVA         | ANOVA + Tukey / Games–Howell, Kruskal–Wallis + Dunn's |
-
-**Infrastructure:**
-
-- YAML configuration schema with validation
-- Long-format data loader (`.csv` / `.xlsx`) with schema checks
-- Assumption checks: Shapiro–Wilk normality, Levene's homogeneity of variance
-- Interactive confirmation after assumption review (`--no-confirm` for scripting)
-- APA 7 formatter → `.docx` (paste-into-manuscript) + `.xlsx` (multi-sheet archive)
-- Run provenance: Git commit hash, data hash, timestamps, full config echoed in outputs
-- 20 unit tests validating outputs against direct `pingouin` calls
+| Demographic / Table 1 | `tableone` wrapper with per-variable tests |
+| Two-group independent | Student's *t*, Welch's *t*, Mann-Whitney *U* |
+| Two-group paired | Paired *t*, Wilcoxon signed-rank |
+| One-way ANOVA | ANOVA + Tukey/Games-Howell, Welch's ANOVA, Kruskal-Wallis + Dunn's |
+| Repeated-measures ANOVA | RM-ANOVA with Mauchly's test + GG/HF correction + pairwise post-hoc |
+| Mixed ANOVA | Within × Between with simple-effects follow-up on significant interactions |
+| Correlations | Pearson / Spearman / Kendall with CI, matrix output |
+| ANCOVA | Covariate adjustment + assumption checks (slopes, linearity, residuals) + adjusted means |
 
 ## Installation
 
@@ -68,7 +50,7 @@ cd pystatkit
 pip install -e .
 ```
 
-Development install with test tools:
+With dev dependencies:
 
 ```bash
 pip install -e ".[dev]"
@@ -80,76 +62,105 @@ pip install -e ".[dev]"
 # 1. Generate the bundled synthetic example dataset
 python examples/study_example/generate_data.py
 
-# 2. Run a Welch's t-test from its config
+# 2. Run the full v0.2 demo (7 methods in one config)
 python -m pystatkit.cli \
-    --config examples/study_example/config/01_two_group.yaml \
+    --config examples/study_example/config/full_demo.yaml \
     --no-confirm
 ```
 
-This produces `01_gaze_duration_HC_vs_PwP.docx` and `.xlsx` in `examples/study_example/outputs/`, along with a log file containing full provenance metadata.
+This produces one `.docx` + `.xlsx` per method in `examples/study_example/outputs/`, plus a shared run log. Drop `--no-confirm` for interactive confirmation after each assumption check.
 
-For an interactive run with the human-in-the-loop prompt, drop the `--no-confirm` flag.
-
-See `examples/study_example/README.md` for the full three-analysis walkthrough.
-
-## Minimal config example
+## A minimal config
 
 ```yaml
-data_file: data/study2.csv
-design: two_group_independent
-method: welch_t
+study:
+  name: "Study 2: VR vs real-world gait"
+  analyst: "Joash Ye"
+  date: "2026-04-17"
 
-dv: gaze_duration
-group: group            # e.g. HC / PwP
+data:
+  file: "data/study2.csv"
+  id_col: "subject_id"
+  format: "long"
 
-output_dir: outputs/tables
-output_name: study2_gaze_HC_vs_PwP
-alpha: 0.05
-confirm_method: true
+defaults:
+  alpha: 0.05
+  confirm_method: true
+
+output:
+  dir: "results"
+  basename: "study2"
+  formats: ["docx", "xlsx"]
+
+methods:
+  demographic:
+    enabled: true
+    group_by: "group"
+    continuous: ["age", "bmi"]
+    categorical: ["sex"]
+
+  two_group:
+    enabled: true
+    outcome: "gaze_duration"
+    group: "group"
+    method: "welch_t"
 ```
 
 ## Data schema
 
-To let one codebase serve many studies, `pystatkit` expects long-format data — one observation per row. The config file names the columns used for `dv`, `group`, `subject`, and `condition` as appropriate to the design.
+`pystatkit` expects **long format** — one observation per row. The config names the columns used for `outcome`, `group`, `subject`, etc. Multiple outcomes can live in separate columns of the same file; `pystatkit` filters to rows with a valid value for the outcome under analysis.
 
-| subject_id | group | condition | age | sex | dv_1 | dv_2 |
-|------------|-------|-----------|-----|-----|------|------|
-| S01        | HC    | real      | 68  | M   | 1.23 | 0.045|
-| S01        | HC    | VR        | 68  | M   | 1.45 | 0.052|
-| S02        | PwP   | real      | 71  | F   | 1.67 | 0.061|
+```
+subject_id | group | time | age | sex | gaze_duration | rt
+S01        | HC    | T1   | 68  | M   | 1.23          | 450
+S01        | HC    | T2   | 68  | M   | NaN           | 475
+S02        | PwP   | T1   | 71  | F   | 1.67          | 510
+```
 
-Multiple DVs can live as separate columns in the same file; `pystatkit` filters to rows with a valid value for the DV under analysis.
+If your data is wide format, convert it to long with `pandas.melt()` before passing it to `pystatkit`.
+
+## Reproducibility features
+
+Every output file embeds:
+
+- Path to the config file that produced it
+- Short SHA-256 hash of the input data
+- Git commit hash (and dirty-working-tree flag)
+- ISO timestamp and Python/platform version
+- `pystatkit` version
+
+This means you can always trace a table in a manuscript back to the exact code, data, and config that produced it.
 
 ## Roadmap
 
-- **v0.2** — Demographic (Table 1) generation via `tableone`; one-sample tests; richer non-parametric options
-- **v0.3** — Repeated-measures ANOVA, mixed ANOVA, ANCOVA
-- **v0.4** — Correlations (Pearson / Spearman), chi-square, Fisher's exact
-- **v0.5** — Interactive method selection with live assumption feedback
+- **v0.3** — Wide-format input support via automatic `pd.melt`; more effect sizes (omega², epsilon²)
+- **v0.4** — Mixed-effects models via `statsmodels`; Bayesian alternatives
+- **v0.5** — Interactive method selection with live assumption feedback (TUI)
 - **v1.0** — Stable API, full documentation, reference-dataset validation suite
 
 ## Scope and limitations
 
-`pystatkit` is intended for standard inferential analyses in experimental research designs. It is **not** a substitute for statistical expertise. Users are expected to understand the methods they select and to validate results against established software during initial adoption.
+`pystatkit` is intended for standard inferential analyses in experimental research designs. It is **not** a substitute for statistical expertise. Users are expected to understand the methods they select. Complex causal inference, structural equation modelling, and bespoke modelling strategies are outside scope.
 
-Analyses involving complex causal inference, structural equation modelling, or bespoke modelling strategies are outside the current scope.
+Results should be cross-checked against an independent statistical package (SPSS, R, JASP) during initial adoption.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Feedback, feature requests, and design discussion are especially welcome at this early stage.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Feedback on design and scope is especially welcome at this early stage.
 
 ## License
 
-Released under the MIT License. See [`LICENSE`](LICENSE) for full terms.
+MIT. See [`LICENSE`](LICENSE).
 
 ## Acknowledgements
 
-`pystatkit` builds on the work of several excellent open-source projects:
+`pystatkit` builds on excellent open-source work, especially:
 
-- [`pingouin`](https://pingouin-stats.org/) by Raphael Vallat — statistical tests and effect sizes
-- [`statsmodels`](https://www.statsmodels.org/) — regression and mixed-effects modelling (planned)
-- [`pandas`](https://pandas.pydata.org/) — data manipulation
-- [`python-docx`](https://python-docx.readthedocs.io/) — Word output
+- [`pingouin`](https://pingouin-stats.org/) — Raphael Vallat
+- [`tableone`](https://github.com/tompollard/tableone) — Tom Pollard *et al.*
+- [`statsmodels`](https://www.statsmodels.org/)
+- [`pandas`](https://pandas.pydata.org/)
+- [`python-docx`](https://python-docx.readthedocs.io/)
 
 ---
 
