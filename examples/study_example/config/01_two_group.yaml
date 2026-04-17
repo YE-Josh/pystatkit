@@ -1,0 +1,17 @@
+# Example: HC vs PwP comparison on gaze duration.
+#
+# This config uses Welch's t-test because we expect unequal variances
+# (PwP typically shows more variable gaze behaviour).
+
+data_file: examples/study_example/data/synthetic_gait_data.csv
+design: two_group_independent
+method: welch_t
+
+dv: gaze_duration_real
+group: group
+
+output_dir: examples/study_example/outputs
+output_name: 01_gaze_duration_HC_vs_PwP
+
+alpha: 0.05
+confirm_method: false   # set true for interactive use

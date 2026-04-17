@@ -1,0 +1,16 @@
+# Example: reaction time across three difficulty levels (one-way ANOVA).
+
+data_file: examples/study_example/data/synthetic_gait_data.csv
+design: one_way_anova
+method: anova
+
+dv: reaction_time
+group: difficulty
+
+posthoc: tukey
+
+output_dir: examples/study_example/outputs
+output_name: 03_rt_by_difficulty
+
+alpha: 0.05
+confirm_method: false
