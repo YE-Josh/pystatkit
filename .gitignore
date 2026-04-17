@@ -1,0 +1,240 @@
+# =============================================================================
+# pystatkit — .gitignore
+# Covers: Python, MATLAB, Excel/Office, IDEs, OS, and research data
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+profile_default/
+ipython_config.py
+
+# pyenv / pipenv / poetry / pdm
+.python-version
+Pipfile.lock
+poetry.lock
+.pdm.toml
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Ruff / linting caches
+.ruff_cache/
+
+# Sphinx documentation
+docs/_build/
+
+# -----------------------------------------------------------------------------
+# MATLAB
+# -----------------------------------------------------------------------------
+# Compiled files
+*.mex*
+*.asv
+*.autosave
+*.m~
+
+# Simulink / codegen
+slprj/
+sccprj/
+codegen/
+
+# MATLAB session files
+*.mat.bak
+octave-workspace
+
+# NOTE: .mat files are NOT ignored by default — small intermediate .mat files
+# you want to track can stay. For large raw .mat datasets, either:
+#   (a) use Git LFS, or
+#   (b) add a project-specific rule below, e.g.:
+#       data/raw/*.mat
+#       data/processed/large_*.mat
+
+# -----------------------------------------------------------------------------
+# Excel, Word, PowerPoint temp & lock files
+# -----------------------------------------------------------------------------
+~$*.xlsx
+~$*.xls
+~$*.xlsm
+~$*.xlsb
+~$*.docx
+~$*.doc
+~$*.pptx
+~$*.ppt
+*.xlk
+*.xlsx.bak
+
+# -----------------------------------------------------------------------------
+# IDEs / editors
+# -----------------------------------------------------------------------------
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# Sublime
+*.sublime-project
+*.sublime-workspace
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# -----------------------------------------------------------------------------
+# Operating system
+# -----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# -----------------------------------------------------------------------------
+# Research data — DO NOT commit raw participant data
+# -----------------------------------------------------------------------------
+# Raw data directories (adjust paths to match your project structure)
+data/raw/
+data/interim/
+data/private/
+raw_data/
+
+# Participant identifiers, eye-tracker exports, VR logs
+*.tobii
+*.gz
+*.h5
+*.hdf5
+*.parquet
+
+# Uncomment the following if you want to ignore ALL large binary data by default:
+# *.mat
+# *.csv
+# *.xlsx
+# Then whitelist small example/test data explicitly:
+# !tests/fixtures/*.csv
+
+# Outputs that can be regenerated from code + config
+outputs/figures/
+outputs/tables/
+outputs/logs/
+results/*.docx
+results/*.xlsx
+!results/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Credentials / secrets — never commit
+# -----------------------------------------------------------------------------
+*.pem
+*.key
+.secrets/
+secrets.yaml
+config.local.yaml
+.env.local
+
+# -----------------------------------------------------------------------------
+# Miscellaneous
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.old
+*.orig
+.cache/
