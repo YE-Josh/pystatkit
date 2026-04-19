@@ -1,0 +1,251 @@
+# =============================================================================
+# pystatkit v0.2 — 配置文件填写指南
+# 不需要 Git！这只是一个普通文本文件，用记事本或 VS Code 编辑即可。
+# 运行方式：python -m pystatkit.cli --config 此文件的路径.yaml
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 【研究信息】 — 会写入每一份输出文件的元数据，方便追溯
+# -----------------------------------------------------------------------------
+study:
+  name: "填写你的研究名称"          # 任意文字，例如 "Study 1: VR vs 真实步态"
+  analyst: "填写分析者姓名"          # 例如 "张三"
+  date: "2026-04-18"               # 填写今天日期，格式 YYYY-MM-DD
+  notes: "填写备注（可留空）"        # 可选，例如 "初步分析，待确认样本量"
+
+
+# -----------------------------------------------------------------------------
+# 【数据文件】 — 告诉 pystatkit 去哪里读你的 CSV/Excel
+# 重要：数据必须是"长格式"（每行一条观测记录）
+# -----------------------------------------------------------------------------
+data:
+  file: "C:/Users/你的用户名/Desktop/mydata.csv"
+                                   # ↑ 填写你的数据文件完整路径
+                                   # Windows 路径用正斜杠 / 或双反斜杠 \\
+                                   # 示例："C:/Users/jiaxi/Desktop/study1.csv"
+                                   # 也可以用相对路径，如 "data/study1.csv"
+  sheet: null                      # 如果是 Excel 文件，填写 Sheet 名，如 "Sheet1"
+                                   # 如果是 CSV 文件，保持 null 不变
+  format: "long"                   # 目前只支持 "long"（长格式），不要修改
+  id_col: "subject_id"             # 填写你数据里代表"被试编号"的列名
+                                   # 例如你的列叫 "ID" 就写 "ID"
+
+
+# -----------------------------------------------------------------------------
+# 【全局默认值】 — 适用于所有分析方法，可在每个方法里单独覆盖
+# -----------------------------------------------------------------------------
+defaults:
+  alpha: 0.05                      # 显著性水平，通常填 0.05
+  ci_level: 0.95                   # 置信区间水平，通常填 0.95
+  digits: 3                        # 输出结果保留小数位数
+  na_policy: "listwise"            # 缺失值处理方式
+                                   # 可选："listwise"（整行删除）| "pairwise"（成对删除）
+  p_adjust: "holm"                 # 多重比较校正方法
+                                   # 可选："none" | "bonferroni" | "holm" | "fdr_bh"
+                                   # 推荐 "holm"（比 bonferroni 更强，适合大多数情况）
+  confirm_method: true             # true = 每个方法运行前询问你是否确认
+                                   # false = 直接跑完所有方法（批量运行时用）
+
+
+# -----------------------------------------------------------------------------
+# 【输出设置】 — 结果文件保存位置和格式
+# -----------------------------------------------------------------------------
+output:
+  dir: "C:/Users/你的用户名/Desktop/results"
+                                   # ↑ 填写输出文件夹路径（会自动创建）
+  basename: "study1"               # 输出文件名前缀
+                                   # 例如填 "study1" → 生成 study1_two_group.docx 等
+  formats: ["docx", "xlsx"]        # 输出格式，可选组合：
+                                   # "docx" = Word 文档（APA 格式）
+                                   # "xlsx" = Excel 表格
+                                   # "csv"  = CSV 纯数据
+  include_provenance: true         # true = 在文件里记录运行时间、数据哈希等溯源信息
+
+
+# -----------------------------------------------------------------------------
+# 【分析方法】 — 把你需要的方法设为 enabled: true，不需要的设为 false
+# 每个方法下面的列名（如 outcome、group）必须和你数据里的列名完全一致！
+# -----------------------------------------------------------------------------
+methods:
+
+  # ---------------------------------------------------------------------------
+  # 1. 【人口学表格 / Table 1】
+  # 用途：生成描述性统计表，按组比较，适合论文第一张表
+  # ---------------------------------------------------------------------------
+  demographic:
+    enabled: true                  # true = 运行此方法 | false = 跳过
+
+    group_by: "group"              # 分组列的列名（例如 "group"、"condition"）
+                                   # 填 null 则不分组，只出整体统计
+
+    continuous: ["age", "bmi"]     # 连续变量列名列表，例如：["age", "score", "rt"]
+                                   # 留空则写 []
+
+    categorical: ["sex"]           # 分类变量列名列表，例如：["sex", "education"]
+                                   # 留空则写 []
+
+    continuous_summary: "mean_sd"  # 连续变量汇总方式
+                                   # 可选："mean_sd"（均值±标准差）
+                                   #       "median_iqr"（中位数和四分位距）
+                                   #       "auto"（自动选择）
+
+    nonnormal: []                  # 非正态变量列表，这些变量强制用 median_iqr
+                                   # 例如：["rt", "score"]
+
+    include_tests: true            # true = 加入组间统计检验（t 检验、卡方等）
+    overall_column: true           # true = 输出表格包含"整体"列
+
+
+  # ---------------------------------------------------------------------------
+  # 2. 【两组独立样本比较】
+  # 用途：比较两组（如干预组 vs 对照组）在某个结果变量上的差异
+  # ---------------------------------------------------------------------------
+  two_group:
+    enabled: true
+
+    outcome: "score"               # 结果变量（因变量）列名
+    group: "group"                 # 分组变量列名（必须只有 2 个水平）
+
+    method: "welch_t"              # 选择检验方法（必须明确填写，不能用 auto）：
+                                   # "welch_t"      → Welch's t 检验（推荐，方差不等也适用）
+                                   # "independent_t" → 独立样本 t 检验（假设方差相等）
+                                   # "mann_whitney"  → Mann-Whitney U（非参数，不假设正态）
+
+    normality_check: "shapiro"     # 正态性检验方法
+                                   # 可选："shapiro"（Shapiro-Wilk）| "anderson"（Anderson-Darling）
+
+    homogeneity_check: "levene_median"
+                                   # 方差齐性检验
+                                   # 可选："levene_median"（Brown-Forsythe，推荐）
+                                   #       "levene_mean"（标准 Levene）
+
+    effect_size: "cohens_d"        # 效应量
+                                   # 可选："cohens_d" | "glass_delta" | "hedges_g"
+
+    alternative: "two_sided"       # 备择假设方向
+                                   # 可选："two_sided" | "greater" | "less"
+
+
+  # ---------------------------------------------------------------------------
+  # 3. 【配对样本比较】
+  # 用途：同一组被试在两个条件/时间点的比较（前测 vs 后测）
+  # ---------------------------------------------------------------------------
+  paired:
+    enabled: false                 # 改为 true 启用
+
+    outcome: "score"               # 结果变量列名
+    condition: "time"              # 条件/时间列名（必须只有 2 个水平）
+
+    method: "paired_t"             # 可选："paired_t"（配对 t 检验）
+                                   #       "wilcoxon"（Wilcoxon 符号秩，非参数）
+
+    alternative: "two_sided"       # 可选："two_sided" | "greater" | "less"
+
+
+  # ---------------------------------------------------------------------------
+  # 4. 【单因素方差分析（One-way ANOVA）】
+  # 用途：比较 3 组或以上的均值差异
+  # ---------------------------------------------------------------------------
+  anova_oneway:
+    enabled: false                 # 改为 true 启用
+
+    outcome: "score"               # 结果变量列名
+    group: "group"                 # 分组变量列名（可有 3 个或以上水平）
+
+    method: "anova"                # 可选：
+                                   # "anova"         → 标准单因素 ANOVA
+                                   # "welch_anova"   → Welch's ANOVA（方差不齐时推荐）
+                                   # "kruskal_wallis"→ Kruskal-Wallis（非参数）
+
+    normality_check: "shapiro"     # 可选："shapiro" | "anderson"
+    homogeneity_check: "levene_median"  # 可选："levene_median" | "levene_mean"
+
+    posthoc: "tukey"               # 事后检验方法
+                                   # 可选："tukey"（标准，方差齐时用）
+                                   #       "games_howell"（方差不齐时用）
+                                   #       "dunn"（配合 kruskal_wallis 用）
+
+    effect_size: "partial_eta_sq"  # 可选："partial_eta_sq" | "eta_sq" | "omega_sq"
+
+
+  # ---------------------------------------------------------------------------
+  # 5. 【重复测量方差分析（Repeated-measures ANOVA）】
+  # 用途：同一批被试在 3 个或以上时间点/条件的比较
+  # ---------------------------------------------------------------------------
+  anova_rm:
+    enabled: false                 # 改为 true 启用
+
+    outcome: "score"               # 结果变量列名
+    within: ["time"]               # 组内因素列表，例如 ["time"] 或 ["time", "condition"]
+                                   # 注意：必须用方括号包裹，即使只有一个因素
+
+    sphericity_check: true         # true = 进行 Mauchly 球形假设检验
+    sphericity_correction: "gg"    # 球形假设违反时的校正方法
+                                   # 可选："gg"（Greenhouse-Geisser，推荐）
+                                   #       "hf"（Huynh-Feldt）
+                                   #       "none"（不校正）
+
+    posthoc: "holm"                # 事后检验 p 值校正：
+                                   # 可选："holm" | "bonferroni" | "fdr_bh" | "none"
+
+    effect_size: "partial_eta_sq"  # 可选："partial_eta_sq" | "eta_sq"
+
+
+  # ---------------------------------------------------------------------------
+  # 6. 【混合方差分析（Mixed ANOVA）】
+  # 用途：有一个组内因素（如时间）+ 一个组间因素（如组别）的设计
+  # ---------------------------------------------------------------------------
+  anova_mixed:
+    enabled: false                 # 改为 true 启用
+
+    outcome: "score"               # 结果变量列名
+    within: "time"                 # 组内因素列名（单个，不用方括号）
+    between: "group"               # 组间因素列名
+
+    sphericity_correction: "gg"    # 可选："gg" | "hf" | "none"
+    posthoc: "holm"                # 可选："holm" | "bonferroni" | "fdr_bh" | "none"
+    simple_effects: true           # true = 交互作用显著时自动进行简单效应分析
+    effect_size: "partial_eta_sq"  # 可选："partial_eta_sq" | "eta_sq"
+
+
+  # ---------------------------------------------------------------------------
+  # 7. 【相关分析】
+  # 用途：计算多个连续变量之间的相关系数，并输出相关矩阵
+  # ---------------------------------------------------------------------------
+  correlation:
+    enabled: false                 # 改为 true 启用
+
+    vars: ["age", "score", "rt"]   # 要计算相关的变量列表（至少 2 个）
+                                   # 例如：["age", "bmi", "score", "rt"]
+
+    method: "pearson"              # 相关方法
+                                   # 可选："pearson"（参数，适合正态数据）
+                                   #       "spearman"（非参数，推荐用于排名数据）
+                                   #       "kendall"（非参数，样本小时更稳健）
+
+    ci: true                       # true = 计算并输出置信区间
+    matrix_output: true            # true = 输出完整相关矩阵表格
+
+
+  # ---------------------------------------------------------------------------
+  # 8. 【协方差分析（ANCOVA）】
+  # 用途：控制协变量后比较组间差异（如控制前测分数后比较干预效果）
+  # ---------------------------------------------------------------------------
+  ancova:
+    enabled: false                 # 改为 true 启用
+
+    outcome: "score"               # 结果变量列名
+    group: "group"                 # 分组变量列名
+    covariates: ["baseline"]       # 协变量列表（至少 1 个）
+                                   # 例如：["baseline"] 或 ["age", "baseline_score"]
+
+    check_assumptions:             # 各项假设检验，true = 检验，false = 跳过
+      homogeneity_of_slopes: true  # 回归斜率同质性（交互作用假设）
+      linearity: true              # 协变量与因变量的线性关系
+      normality_residuals: true    # 残差正态性
+      homogeneity_variance: true   # 残差方差齐性
+
+    adjusted_means: true           # true = 输出校正后的组均值（边际均值）
+    posthoc: "holm"                # 可选："holm" | "bonferroni" | "fdr_bh" | "none"
+    effect_size: "partial_eta_sq"  # 可选："partial_eta_sq" | "eta_sq"
